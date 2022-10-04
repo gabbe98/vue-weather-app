@@ -25,8 +25,11 @@ export default {
       gettingLocation: false,
       errorLocationStr: null,
       isDropdownExpanded: false,
-      selectedDropdown: "London",
-      dropdownOptions: ["London", "Paris", "Berlin", "Madrid"],
+      selectedDropdown: "",
+      dropdownOptions: ["Falköping", "Paris", "Berlin", "Madrid"],
+      isSidebarOpen: false,
+      sidebarDimmer: true,
+      right: false,
     };
   },
   created() {
@@ -81,12 +84,18 @@ export default {
           .then((response) => {
             return response.json();
           })
-          .then(this.weatherResult);
+          .then(this.weatherResult)
+          .then(() => {
+            if (!this.isSidebarOpen) {
+              return;
+            }
+            this.toggleSidebar();
+          });
       }
     },
     locationResult(result) {
       this.currentLocation = result[0].name;
-      this.query = this.currentLocation;
+      this.query = this.selectedDropdown = this.currentLocation;
     },
     weatherResult(result) {
       this.weather = result;
@@ -143,9 +152,12 @@ export default {
         return (this.weatherIcon = "/src/assets/weather-icons/mist.png");
       else return weather;
     },
-    setOption(option) {
+    setDropdownOption(option) {
       this.selectedDropdown = option;
       this.isDropdownExpanded = false;
+    },
+    toggleSidebar() {
+      this.isSidebarOpen = !this.isSidebarOpen;
     },
   },
 };
@@ -154,13 +166,14 @@ export default {
 <template>
   <header class="flex justify-between items-center mb-4 sm:mb-16">
     <button
-      class="rounded-full shadow appearance-none p-5 flex items-center justify-center border h-6 w-6 dark:text-white dark:border-white"
+      @click.prevent="toggleSidebar()"
+      class="h-6 w-6 rounded-full shadow appearance-none p-5 flex items-center justify-center border dark:border-white dark:text-white hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900"
     >
       <fa icon="fa-solid fa-bars" class="h-5 w-5" />
     </button>
     <div class="relative text-lg">
       <button
-        class="flex items-center justify-between px-3 py-2 w-full shadow appearance-none border rounded-lg"
+        class="flex items-center justify-between px-3 py-2 w-full shadow appearance-none border dark:border-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900"
         @click="isDropdownExpanded = !isDropdownExpanded"
         @blur="isDropdownExpanded = false"
       >
@@ -183,8 +196,8 @@ export default {
           <li
             v-for="(option, index) in dropdownOptions"
             :key="index"
-            class="cursor-pointer px-3 py-2 transition-colors duration-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-            @mousedown.prevent="setOption(option)"
+            class="cursor-pointer px-3 py-2 transition-colors duration-300 hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900 dark:hover:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900"
+            @mousedown.prevent="setDropdownOption(option)"
           >
             {{ option }}
           </li>
@@ -192,13 +205,75 @@ export default {
       </transition>
     </div>
     <button
-      class="modebtn rounded-full shadow appearance-none p-5 flex items-center justify-center border h-6 w-6 dark:text-white dark:border-white"
+      class="modebtn rounded-full shadow appearance-none p-5 flex items-center justify-center border h-6 w-6 dark:text-white dark:border-white hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900"
       @click="toggleDark()"
     >
       <fa v-if="isDark" icon="fa-solid fa-sun" class="h-5 w-5" />
       <fa v-if="!isDark" icon="fa-solid fa-moon" class="h-5 w-5" />
     </button>
   </header>
+
+  <div
+    class="fixed inset-0 flex z-40"
+    :class="[isSidebarOpen ? 'w-full' : 'w-0']"
+  >
+    <div
+      class="absolute flex top-0 h-screen z-20"
+      :class="[right ? 'right-0 flex-row' : 'left-0 flex-row-reverse']"
+    >
+      <button
+        @click.prevent="toggleSidebar()"
+        class="w-6 h-40 p-1 my-auto rounded shadow appearance-none text-center focus:outline-none duration-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-900 border dark:border-white"
+      >
+        <span
+          :class="[isSidebarOpen ? 'rotate-180' : '']"
+          class="block transform origin-center flex items-center justify-center"
+        >
+          <fa icon="fa-solid fa-chevron-right" class="h-4 w-4" />
+        </span>
+      </button>
+
+      <div
+        ref="content"
+        class="transition-all duration-700 overflow-hidden flex items-center text-left text-slate-50 bg-slate-800 dark:bg-slate-50 dark:text-slate-800"
+        :class="[isSidebarOpen ? 'max-w-lg' : 'max-w-0']"
+      >
+        <div class="w-80 text-xl p-6">
+          <button
+            @click.prevent="toggleSidebar()"
+            class="h-6 w-6 absolute top-5 right-12 rounded-full shadow appearance-none p-5 flex items-center justify-center border dark:border-white hover:bg-slate-900 dark:hover:bg-slate-200"
+          >
+            <fa icon="fa-solid fa-xmark" class="h-5 w-5" />
+          </button>
+          <label for="query">Search for a new city</label>
+          <input
+            v-model="query"
+            @keypress="fetchWeather"
+            placeholder="City name"
+            id="query"
+            type="text"
+            autocomplete="off"
+            class="w-64 border rounded p-3 mb-3 leading-tight focus:outline-none focus:shadow-outline shadow appearance-none text-slate-800 bg-slate-50 dark:bg-slate-800 dark:text-slate-50"
+          />
+          <button
+            class="p-3 my-auto w-64 rounded shadow appearance-none flex items-center justify-center focus:outline-none duration-300 text-slate-800 dark:text-slate-50 bg-slate-50 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-900 border dark:border-white"
+          >
+            Add to favorites
+            <fa icon="fa-solid fa-plus" class="h-4 w-4 ml-2" />
+          </button>
+          <slot></slot>
+        </div>
+      </div>
+    </div>
+
+    <transition name="fade">
+      <div
+        v-if="sidebarDimmer && isSidebarOpen"
+        @click="toggleSidebar()"
+        class="flex-1 bg-gray-400 bg-opacity-75 active:outline-none z-10"
+      />
+    </transition>
+  </div>
 
   <div
     class="mb-6"
@@ -211,7 +286,7 @@ export default {
     v-if="weather.list !== undefined"
   >
     <div class="sm:w-1/3">
-      <h1 class="mb-6 text-xl text-left sm:mb-10">Today's Report</h1>
+      <h1 class="mb-6 text-xl text-left sm:mb-10">Current Report</h1>
       <img
         class="w-32 sm:mx-0 m-auto mb-4"
         :src="
@@ -260,32 +335,55 @@ export default {
       </div>
     </div>
   </div>
-  <input
-    v-model="query"
-    @keypress="fetchWeather"
-    placeholder="Search city..."
-    id="query"
-    type="text"
-    autocomplete="off"
-    class="shadow appearance-none border rounded w-full py-2 px-3 leading-tight focus:outline-none focus:shadow-outline"
-  />
   <Accordion
     v-if="weather.list !== undefined"
     v-for="weatherItem in weather.list"
     :title="weatherItem.dt_txt"
   >
-    <img
-      class="w-32 m-auto mb-4"
-      :src="
-        setWeatherIcon(weatherItem.weather[0].main, weatherItem.weather[0].icon)
-      "
-      alt="Current weather icon."
-    />
-    <p class="mb-3">Its {{ setWeatherName(weatherItem.weather[0].main) }}</p>
-    <h3 class="text-5xl">
-      {{ Math.round(weatherItem.main.temp) }}
-      <span class="text-4xl text-blue-700 absolute">°</span>
-    </h3>
+    <div>
+      <img
+        class="w-32 mb-4"
+        :src="
+          setWeatherIcon(
+            weatherItem.weather[0].main,
+            weatherItem.weather[0].icon
+          )
+        "
+        alt="Current weather icon."
+      />
+      <p class="mb-3">Its {{ setWeatherName(weatherItem.weather[0].main) }}</p>
+      <h3 class="text-5xl">
+        {{ Math.round(weatherItem.main.temp) }}
+        <span class="text-4xl text-blue-700 absolute">°</span>
+      </h3>
+    </div>
+    <div class="w-1/3 sm:w-32 sm:mx-3">
+      <img
+        class="w-10 m-auto mb-2 sm:w-16"
+        src="src/assets/weather-icons/wind.png"
+        alt="Current weather icon."
+      />
+      <p>{{ weatherItem.wind.speed }} m/s</p>
+      <p class="text-xs sm:text-base">Wind Speed</p>
+    </div>
+    <div class="w-1/3 sm:w-32 sm:mx-3">
+      <img
+        class="w-10 m-auto mb-2 sm:w-16"
+        src="src/assets/weather-icons/humidity.png"
+        alt="Current weather icon."
+      />
+      <p>{{ weatherItem.main.humidity }}%</p>
+      <p class="text-xs sm:text-base">Humidity</p>
+    </div>
+    <div class="w-1/3 sm:w-32 sm:mx-3">
+      <img
+        class="w-10 m-auto mb-2 sm:w-16"
+        src="src/assets/weather-icons/raindrops.png"
+        alt="Current weather icon."
+      />
+      <p>{{ Math.floor(weatherItem.pop * 100) }}%</p>
+      <p class="text-xs sm:text-base">Chance of Rain</p>
+    </div>
   </Accordion>
 </template>
 
