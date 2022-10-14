@@ -11,9 +11,6 @@ export default {
   mounted() {
     document.title = "Vue Weather app using Open Weather Map API.";
   },
-  components: {
-    Accordion,
-  },
   data() {
     return {
       api_key: "375b5b72defecfdfccfa090d50f49db4",
@@ -26,10 +23,11 @@ export default {
       errorLocationStr: null,
       isDropdownExpanded: false,
       selectedDropdown: "",
-      dropdownOptions: ["Falköping", "Paris", "Berlin", "Madrid"],
+      dropdownOptions: ["Stockholm", "Beijing", "New York", "Los Angeles"],
       isSidebarOpen: false,
       sidebarDimmer: true,
-      right: false,
+      sidebarRight: false,
+      dayDates: [],
     };
   },
   created() {
@@ -76,8 +74,8 @@ export default {
         })
         .then(this.locationResult);
     },
-    fetchWeather(e) {
-      if (e.key == "Enter") {
+    fetchWeather(event, savedQuery) {
+      if (event.key == "Enter" && !savedQuery) {
         fetch(
           `${this.url_base}forecast?q=${this.query}&APPID=${this.api_key}&units=metric`
         )
@@ -90,6 +88,22 @@ export default {
               return;
             }
             this.toggleSidebar();
+            this.selectedDropdown = this.query;
+          });
+      } else if (savedQuery) {
+        fetch(
+          `${this.url_base}forecast?q=${savedQuery}&APPID=${this.api_key}&units=metric`
+        )
+          .then((response) => {
+            return response.json();
+          })
+          .then(this.weatherResult)
+          .then(() => {
+            if (!this.isSidebarOpen) {
+              return;
+            }
+            this.toggleSidebar();
+            this.selectedDropdown = savedQuery;
           });
       }
     },
@@ -152,9 +166,40 @@ export default {
         return (this.weatherIcon = "/src/assets/weather-icons/mist.png");
       else return weather;
     },
+    parseDayString(date) {
+      let unixDate = Date.parse(date);
+      return new Date(unixDate).toString().slice(0, 16);
+    },
+    checkIfNewDay(date) {
+      let unixDate = Date.parse(date);
+      let newDate = new Date(unixDate).toString();
+
+      if (newDate.slice(16, 24) === "00:00:00") {
+        return true;
+      } else {
+        return false;
+      }
+    },
+    adjustForTimezone(date, timezone) {
+      let unixDate = Date.parse(date);
+      let newDate = new Date(unixDate).toString();
+      let timezoneHours = Number(timezone / 3600);
+
+      let formatDate = "";
+      if (timezoneHours >= 0) {
+        return (formatDate = newDate.slice(16, 25) + "UTC+" + timezoneHours);
+      } else if (timezoneHours < 0) {
+        return (formatDate = newDate.slice(16, 25) + "UTC" + timezoneHours);
+      }
+    },
     setDropdownOption(option) {
       this.selectedDropdown = option;
       this.isDropdownExpanded = false;
+    },
+    addDropdownOption() {
+      if (!this.dropdownOptions.includes(this.query)) {
+        return this.dropdownOptions.push(this.query);
+      }
     },
     toggleSidebar() {
       this.isSidebarOpen = !this.isSidebarOpen;
@@ -173,19 +218,19 @@ export default {
     </button>
     <div class="relative text-lg">
       <button
-        class="flex items-center justify-between px-3 py-2 w-full shadow appearance-none border dark:border-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900"
+        class="w-40 flex items-center justify-between px-3 py-2 shadow appearance-none border dark:border-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900"
         @click="isDropdownExpanded = !isDropdownExpanded"
         @blur="isDropdownExpanded = false"
       >
         <fa icon="fa-solid fa-map-marker-alt" class="h-4 w-4 mr-2" />
-        <span>{{ selectedDropdown }}</span>
+        <span class="w-4/5 truncate capitalize">{{ selectedDropdown }}</span>
         <fa icon="fa-solid fa-chevron-down" class="h-4 w-4 ml-2" />
       </button>
       <transition
-        enter-active-class="transform transition duration-500 ease-custom"
+        enter-active-class="transform transition duration-500"
         enter-class="-translate-y-1/2 scale-y-0 opacity-0"
         enter-to-class="translate-y-0 scale-y-100 opacity-100"
-        leave-active-class="transform transition duration-300 ease-custom"
+        leave-active-class="transform transition duration-300"
         leave-class="translate-y-0 scale-y-100 opacity-100"
         leave-to-class="-translate-y-1/2 scale-y-0 opacity-0"
       >
@@ -196,8 +241,11 @@ export default {
           <li
             v-for="(option, index) in dropdownOptions"
             :key="index"
-            class="cursor-pointer px-3 py-2 transition-colors duration-300 hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900 dark:hover:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900"
-            @mousedown.prevent="setDropdownOption(option)"
+            class="truncate cursor-pointer px-3 py-2 transition-colors duration-300 hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900 dark:hover:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-900 dark:hover:bg-slate-900"
+            @mousedown.prevent="
+              setDropdownOption(option);
+              fetchWeather($event, option);
+            "
           >
             {{ option }}
           </li>
@@ -219,7 +267,7 @@ export default {
   >
     <div
       class="absolute flex top-0 h-screen z-20"
-      :class="[right ? 'right-0 flex-row' : 'left-0 flex-row-reverse']"
+      :class="[sidebarRight ? 'right-0 flex-row' : 'left-0 flex-row-reverse']"
     >
       <button
         @click.prevent="toggleSidebar()"
@@ -235,28 +283,29 @@ export default {
 
       <div
         ref="content"
-        class="transition-all duration-700 overflow-hidden flex items-center text-left text-slate-50 bg-slate-800 dark:bg-slate-50 dark:text-slate-800"
+        class="transition-all duration-700 overflow-hidden flex items-center text-left text-slate-800 bg-slate-50 dark:bg-slate-800 dark:text-slate-50"
         :class="[isSidebarOpen ? 'max-w-lg' : 'max-w-0']"
       >
         <div class="w-80 text-xl p-6">
           <button
-            @click.prevent="toggleSidebar()"
-            class="h-6 w-6 absolute top-5 right-12 rounded-full shadow appearance-none p-5 flex items-center justify-center border dark:border-white hover:bg-slate-900 dark:hover:bg-slate-200"
+            @click="toggleSidebar()"
+            class="h-6 w-6 absolute top-5 right-12 rounded-full shadow appearance-none p-5 flex items-center justify-center border dark:border-white hover:bg-slate-200 dark:hover:bg-slate-900"
           >
             <fa icon="fa-solid fa-xmark" class="h-5 w-5" />
           </button>
           <label for="query">Search for a new city</label>
           <input
             v-model="query"
-            @keypress="fetchWeather"
+            @keypress="fetchWeather($event)"
             placeholder="City name"
             id="query"
             type="text"
             autocomplete="off"
-            class="w-64 border rounded p-3 mb-3 leading-tight focus:outline-none focus:shadow-outline shadow appearance-none text-slate-800 bg-slate-50 dark:bg-slate-800 dark:text-slate-50"
+            class="w-64 border rounded p-3 mb-3 leading-tight focus:outline-none focus:shadow-outline shadow appearance-none text-slate-800 bg-slate-50 dark:bg-slate-800 dark:text-slate-50 hover:bg-slate-200 dark:hover:bg-slate-900"
           />
           <button
             class="p-3 my-auto w-64 rounded shadow appearance-none flex items-center justify-center focus:outline-none duration-300 text-slate-800 dark:text-slate-50 bg-slate-50 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-900 border dark:border-white"
+            @click.prevent="addDropdownOption"
           >
             Add to favorites
             <fa icon="fa-solid fa-plus" class="h-4 w-4 ml-2" />
@@ -335,56 +384,72 @@ export default {
       </div>
     </div>
   </div>
-  <Accordion
-    v-if="weather.list !== undefined"
+  <h2 v-if="weather.list !== undefined" class="text-left text-2xl py-6 mt-2">
+    {{ parseDayString(weather.list[0].dt_txt) }}
+  </h2>
+  <template
     v-for="weatherItem in weather.list"
-    :title="weatherItem.dt_txt"
+    v-if="weather.list !== undefined"
   >
-    <div>
-      <img
-        class="w-32 mb-4"
-        :src="
-          setWeatherIcon(
-            weatherItem.weather[0].main,
-            weatherItem.weather[0].icon
-          )
-        "
-        alt="Current weather icon."
-      />
-      <p class="mb-3">Its {{ setWeatherName(weatherItem.weather[0].main) }}</p>
-      <h3 class="text-5xl">
-        {{ Math.round(weatherItem.main.temp) }}
-        <span class="text-4xl text-blue-700 absolute">°</span>
-      </h3>
-    </div>
-    <div class="w-1/3 sm:w-32 sm:mx-3">
-      <img
-        class="w-10 m-auto mb-2 sm:w-16"
-        src="src/assets/weather-icons/wind.png"
-        alt="Current weather icon."
-      />
-      <p>{{ weatherItem.wind.speed }} m/s</p>
-      <p class="text-xs sm:text-base">Wind Speed</p>
-    </div>
-    <div class="w-1/3 sm:w-32 sm:mx-3">
-      <img
-        class="w-10 m-auto mb-2 sm:w-16"
-        src="src/assets/weather-icons/humidity.png"
-        alt="Current weather icon."
-      />
-      <p>{{ weatherItem.main.humidity }}%</p>
-      <p class="text-xs sm:text-base">Humidity</p>
-    </div>
-    <div class="w-1/3 sm:w-32 sm:mx-3">
-      <img
-        class="w-10 m-auto mb-2 sm:w-16"
-        src="src/assets/weather-icons/raindrops.png"
-        alt="Current weather icon."
-      />
-      <p>{{ Math.floor(weatherItem.pop * 100) }}%</p>
-      <p class="text-xs sm:text-base">Chance of Rain</p>
-    </div>
-  </Accordion>
+    <h2
+      v-if="checkIfNewDay(weatherItem.dt_txt)"
+      class="text-left text-2xl py-6 mt-2"
+    >
+      {{ parseDayString(weatherItem.dt_txt) }}
+    </h2>
+    <Accordion
+      :title="adjustForTimezone(weatherItem.dt_txt, weather.city.timezone)"
+    >
+      <div>
+        <img
+          class="w-32 mb-4 m-auto"
+          :src="
+            setWeatherIcon(
+              weatherItem.weather[0].main,
+              weatherItem.weather[0].icon
+            )
+          "
+          alt="Current weather icon."
+        />
+        <p class="mb-3">
+          Its {{ setWeatherName(weatherItem.weather[0].main) }}
+        </p>
+        <h3 class="text-5xl mb-10">
+          {{ Math.round(weatherItem.main.temp) }}
+          <span class="text-4xl text-blue-700 absolute">°</span>
+        </h3>
+      </div>
+      <div class="flex justify-center">
+        <div class="w-1/3 sm:w-32 sm:mx-3">
+          <img
+            class="w-10 m-auto mb-2 sm:w-16"
+            src="src/assets/weather-icons/wind.png"
+            alt="Current weather icon."
+          />
+          <p>{{ weatherItem.wind.speed }} m/s</p>
+          <p class="text-xs sm:text-base">Wind Speed</p>
+        </div>
+        <div class="w-1/3 sm:w-32 sm:mx-3">
+          <img
+            class="w-10 m-auto mb-2 sm:w-16"
+            src="src/assets/weather-icons/humidity.png"
+            alt="Current weather icon."
+          />
+          <p>{{ weatherItem.main.humidity }}%</p>
+          <p class="text-xs sm:text-base">Humidity</p>
+        </div>
+        <div class="w-1/3 sm:w-32 sm:mx-3">
+          <img
+            class="w-10 m-auto mb-2 sm:w-16"
+            src="src/assets/weather-icons/raindrops.png"
+            alt="Current weather icon."
+          />
+          <p>{{ Math.floor(weatherItem.pop * 100) }}%</p>
+          <p class="text-xs sm:text-base">Chance of Rain</p>
+        </div>
+      </div>
+    </Accordion>
+  </template>
 </template>
 
 <style>
@@ -392,3 +457,10 @@ export default {
   transition-timing-function: cubic-bezier(0.61, -0.53, 0.43, 1.43);
 }
 </style>
+
+<!-- TODO: -->
+<!-- Make some form validation -->
+<!-- Use local- & sessionstorage for favorited cities -->
+<!-- Refactor more things down into components instead of using app.vue only, probably needs some state management ex. Vuex or Pinia  -->
+<!-- Change everything from the options API to Composition API  -->
+<!-- Make the code more DRY! -->
